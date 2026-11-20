@@ -24,6 +24,40 @@ if "document_index" not in st.session_state:
     st.session_state.document_index = None
 
 with st.sidebar:
+    st.header("Provider")
+    provider = st.selectbox(
+        "Chat provider",
+        options=["openai", "gemini"],
+        index=0 if os.getenv("AI_PROVIDER", "openai").lower() == "openai" else 1,
+    )
+    os.environ["AI_PROVIDER"] = provider
+
+    if provider == "openai":
+        api_key = st.text_input(
+            "OpenAI API key",
+            type="password",
+            value=os.getenv("OPENAI_API_KEY", ""),
+            help="Stored only in this running session.",
+        )
+        if api_key:
+            os.environ["OPENAI_API_KEY"] = api_key
+        st.caption("Embedding provider: OpenAI")
+        os.environ["EMBEDDING_PROVIDER"] = "openai"
+    else:
+        api_key = st.text_input(
+            "Gemini API key",
+            type="password",
+            value=os.getenv("GEMINI_API_KEY", ""),
+            help="Stored only in this running session.",
+        )
+        if api_key:
+            os.environ["GEMINI_API_KEY"] = api_key
+        st.caption("Embedding provider: Gemini")
+        os.environ["EMBEDDING_PROVIDER"] = "gemini"
+
+    if not api_key:
+        st.warning("Enter an API key to enable chat and document indexing.")
+
     st.header("Documents")
     uploaded = st.file_uploader(
         "Add PDF, TXT, MD, or CSV",
@@ -67,6 +101,11 @@ if question:
         response_box = st.empty()
         try:
             config = AppConfig.from_env()
+            required_key = "OPENAI_API_KEY" if config.provider == "openai" else "GEMINI_API_KEY"
+            if not os.getenv(required_key):
+                raise ValueError(
+                    f"Enter a {config.provider.title()} API key in the sidebar to start chatting."
+                )
             chat_model = build_chat_model(config)
 
             rag_tool = None
