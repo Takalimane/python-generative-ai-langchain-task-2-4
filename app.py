@@ -15,56 +15,103 @@ from src.rag_agent_app.rag import DocumentIndex
 
 load_dotenv()
 st.set_page_config(page_title="Grounded RAG Agent", page_icon="📚", layout="wide")
-st.title("📚 Document RAG & Tool Agent")
-st.caption("Upload PDFs or text files, ask grounded questions, calculate, or search the web.")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "document_index" not in st.session_state:
     st.session_state.document_index = None
+if "provider" not in st.session_state:
+    st.session_state.provider = os.getenv("AI_PROVIDER", "openai").lower()
+
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"] { background: #f8fafc; border-right: 1px solid #e2e8f0; }
+    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.65rem; }
+    [data-testid="stChatMessage"] { border: 1px solid #eef2f7; border-radius: 16px; margin-bottom: 8px; }
+    [data-testid="stChatInput"] textarea { border-radius: 16px !important; }
+    .app-header { display: flex; align-items: center; min-height: 64px; margin-bottom: 4px; }
+    .app-title { font-size: 1.35rem; font-weight: 700; color: #0f172a; }
+    .app-subtitle { color: #64748b; font-size: 0.88rem; }
+    .welcome-card { max-width: 720px; margin: 18vh auto 0; text-align: center; }
+    .welcome-card h2 { color: #0f172a; }
+    .welcome-card p { color: #64748b; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+header_left, header_right = st.columns([9, 1], vertical_alignment="center")
+with header_left:
+    st.markdown(
+        '<div class="app-header"><div><div class="app-title">Document Assistant</div>'
+        '<div class="app-subtitle">Grounded RAG, research tools, and conversation</div></div></div>',
+        unsafe_allow_html=True,
+    )
+with header_right:
+    with st.popover("⚙️  Settings", use_container_width=True):
+        st.subheader("AI configuration")
+        provider = st.selectbox(
+            "Provider",
+            options=["openai", "gemini"],
+            index=0 if st.session_state.provider == "openai" else 1,
+        )
+        st.session_state.provider = provider
+        os.environ["AI_PROVIDER"] = provider
+
+        if provider == "openai":
+            api_key = st.text_input(
+                "OpenAI API key",
+                type="password",
+                value=os.getenv("OPENAI_API_KEY", ""),
+                placeholder="sk-...",
+                help="Used only by this running session.",
+            )
+            if api_key:
+                os.environ["OPENAI_API_KEY"] = api_key
+            os.environ["EMBEDDING_PROVIDER"] = "openai"
+        else:
+            api_key = st.text_input(
+                "Gemini API key",
+                type="password",
+                value=os.getenv("GEMINI_API_KEY", ""),
+                placeholder="Enter API key",
+                help="Used only by this running session.",
+            )
+            if api_key:
+                os.environ["GEMINI_API_KEY"] = api_key
+            os.environ["EMBEDDING_PROVIDER"] = "gemini"
+
+        tavily_key = st.text_input(
+            "Tavily API key (optional)",
+            type="password",
+            value=os.getenv("TAVILY_API_KEY", ""),
+            help="Needed only when web search is enabled.",
+        )
+        if tavily_key:
+            os.environ["TAVILY_API_KEY"] = tavily_key
+
+        required_key = "OPENAI_API_KEY" if provider == "openai" else "GEMINI_API_KEY"
+        if os.getenv(required_key):
+            st.success("API key connected")
+        else:
+            st.info("Configure an API key to begin.")
 
 with st.sidebar:
-    st.header("Provider")
-    provider = st.selectbox(
-        "Chat provider",
-        options=["openai", "gemini"],
-        index=0 if os.getenv("AI_PROVIDER", "openai").lower() == "openai" else 1,
-    )
-    os.environ["AI_PROVIDER"] = provider
+    st.markdown("### **RAG Workspace**")
+    if st.button("＋  New chat", use_container_width=True):
+        st.session_state.messages = []
+        st.session_state.document_index = None
+        st.rerun()
 
-    if provider == "openai":
-        api_key = st.text_input(
-            "OpenAI API key",
-            type="password",
-            value=os.getenv("OPENAI_API_KEY", ""),
-            help="Stored only in this running session.",
-        )
-        if api_key:
-            os.environ["OPENAI_API_KEY"] = api_key
-        st.caption("Embedding provider: OpenAI")
-        os.environ["EMBEDDING_PROVIDER"] = "openai"
-    else:
-        api_key = st.text_input(
-            "Gemini API key",
-            type="password",
-            value=os.getenv("GEMINI_API_KEY", ""),
-            help="Stored only in this running session.",
-        )
-        if api_key:
-            os.environ["GEMINI_API_KEY"] = api_key
-        st.caption("Embedding provider: Gemini")
-        os.environ["EMBEDDING_PROVIDER"] = "gemini"
-
-    if not api_key:
-        st.warning("Enter an API key to enable chat and document indexing.")
-
-    st.header("Documents")
+    st.markdown("#### Documents")
     uploaded = st.file_uploader(
-        "Add PDF, TXT, MD, or CSV",
+        "Upload files",
         type=["pdf", "txt", "md", "csv"],
         accept_multiple_files=True,
+        label_visibility="collapsed",
     )
-    if uploaded and st.button("Build document index", use_container_width=True):
+    if uploaded and st.button("Index documents", use_container_width=True):
         try:
             config = AppConfig.from_env()
             index = DocumentIndex(build_embeddings(config))
@@ -81,15 +128,36 @@ with st.sidebar:
         except Exception as exc:
             st.error(f"Indexing failed: {exc}")
 
-    st.header("Tools")
+    st.markdown("#### Tools")
     enable_web = st.toggle("Enable web search", value=False)
-    if st.button("Clear chat", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
 
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    if st.session_state.document_index is not None:
+        st.caption("✓ Documents indexed")
+    else:
+        st.caption("No documents indexed")
+
+    st.markdown("#### Recent")
+    user_messages = [m["content"] for m in st.session_state.messages if m["role"] == "user"]
+    if user_messages:
+        for recent in user_messages[-4:]:
+            st.caption(recent[:48] + ("…" if len(recent) > 48 else ""))
+    else:
+        st.caption("No recent conversations")
+
+if not st.session_state.messages:
+    st.markdown(
+        """
+        <div class="welcome-card">
+        <h2>What would you like to explore?</h2>
+        <p>Upload documents, ask a grounded question, calculate an expression, or enable web search.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
 question = st.chat_input("Ask about your documents or use a tool...")
 if question:
@@ -104,7 +172,7 @@ if question:
             required_key = "OPENAI_API_KEY" if config.provider == "openai" else "GEMINI_API_KEY"
             if not os.getenv(required_key):
                 raise ValueError(
-                    f"Enter a {config.provider.title()} API key in the sidebar to start chatting."
+                    f"Open Settings and enter a {config.provider.title()} API key to start chatting."
                 )
             chat_model = build_chat_model(config)
 
