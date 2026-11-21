@@ -12,6 +12,7 @@ from src.rag_agent_app.agent import build_agent
 from src.rag_agent_app.config import AppConfig
 from src.rag_agent_app.providers import build_chat_model, build_embeddings
 from src.rag_agent_app.rag import DocumentIndex
+from src.rag_agent_app import safe_external_text
 
 
 load_dotenv()
@@ -445,6 +446,7 @@ with chat_col:
         st.session_state.pending_prompt = None
 
     if question:
+        question = safe_external_text(question)
         st.session_state.messages.append({"role": "user", "content": question})
         with st.chat_message("user"):
             st.markdown(question)
@@ -469,11 +471,11 @@ with chat_col:
                     retrieved = index.retrieve(question, k=5)
                     st.session_state.sources = [
                         {
-                            "source": chunk.metadata.get("source", "unknown"),
+                            "source": safe_external_text(chunk.metadata.get("source", "unknown")),
                             "page": (chunk.metadata.get("page") + 1)
                             if chunk.metadata.get("page") is not None
                             else None,
-                            "excerpt": chunk.page_content,
+                            "excerpt": safe_external_text(chunk.page_content),
                         }
                         for chunk in retrieved
                     ]
@@ -484,10 +486,10 @@ with chat_col:
                             return "No relevant document content found."
                         parts = []
                         for chunk in chunks:
-                            source = chunk.metadata.get("source", "unknown")
+                            source = safe_external_text(chunk.metadata.get("source", "unknown"))
                             page = chunk.metadata.get("page")
                             citation = f"{source}, page {page + 1}" if page is not None else source
-                            parts.append(f"[Source: {citation}] {chunk.page_content}")
+                            parts.append(f"[Source: {citation}] {safe_external_text(chunk.page_content)}")
                         return "\n\n".join(parts)
 
                     rag_tool = StructuredTool.from_function(
@@ -501,14 +503,28 @@ with chat_col:
                     if config.tavily_key:
                         from langchain_community.tools.tavily_search import TavilySearchResults
 
-                        web_tool = TavilySearchResults(
+                        tavily_tool = TavilySearchResults(
                             max_results=5,
                             tavily_api_key=config.tavily_key,
+                        )
+                        def search_web(query: str) -> str:
+                            return safe_external_text(str(tavily_tool.invoke(query)))
+                        web_tool = StructuredTool.from_function(
+                            func=search_web,
+                            name="web_search",
+                            description="Search the live web.",
                         )
                     else:
                         from langchain_community.tools import DuckDuckGoSearchRun
 
-                        web_tool = DuckDuckGoSearchRun(
+                        duckduckgo_tool = DuckDuckGoSearchRun(
+                            name="web_search",
+                            description="Search the live web with DuckDuckGo.",
+                        )
+                        def search_web(query: str) -> str:
+                            return safe_external_text(str(duckduckgo_tool.invoke(query)))
+                        web_tool = StructuredTool.from_function(
+                            func=search_web,
                             name="web_search",
                             description="Search the live web with DuckDuckGo.",
                         )
@@ -542,11 +558,11 @@ with chat_col:
                         executor = build_agent(chat_model, web_tool, rag_tool)
                         result = executor.invoke(
                             {
-                                "input": question,
+                                "input": safe_external_text(question),
                                 "chat_history": [
                                     {
-                                        "role": message["role"],
-                                        "content": message["content"],
+                                        "role": safe_external_text(message["role"]),
+                                        "content": safe_external_text(message["content"]),
                                     }
                                     for message in st.session_state.messages[:-1]
                                 ],

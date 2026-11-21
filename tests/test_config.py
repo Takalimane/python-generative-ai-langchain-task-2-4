@@ -2,6 +2,7 @@ import pytest
 
 from rag_agent_app.config import AppConfig
 from rag_agent_app.providers import build_chat_model
+from rag_agent_app import safe_external_text
 
 
 def test_config_rejects_unknown_provider(monkeypatch):
@@ -33,3 +34,7 @@ def test_openrouter_chat_model_receives_api_key(monkeypatch):
     model = build_chat_model(config)
 
     assert model.openai_api_key.get_secret_value() == "test-openrouter-key"
+
+
+def test_smart_punctuation_is_normalized():
+    assert safe_external_text("The user\u2019s plan \u2014 it\u2019s ready") == "The user's plan - it's ready"
