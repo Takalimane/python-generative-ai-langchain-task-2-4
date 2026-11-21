@@ -16,8 +16,12 @@ def build_chat_model(config: AppConfig) -> BaseChatModel:
             model=config.chat_model,
             temperature=0,
             streaming=True,
-            api_key=key,
+            openai_api_key=key,
             base_url="https://openrouter.ai/api/v1",
+            default_headers={
+                "HTTP-Referer": "https://github.com/Takalimane/python-generative-ai-langchain-task-2-4",
+                "X-Title": "Knowledge Studio",
+            },
         )
 
     if config.provider == "openai":
