@@ -6,9 +6,9 @@ A Streamlit application covering internship Tasks 2, 3, and 4:
 - Recursive text chunking
 - FAISS vector retrieval
 - Strict, source-grounded answers with filename/page citations
-- OpenAI or Gemini chat and embeddings
+- Gemini or OpenRouter free chat, plus Gemini/OpenAI embeddings
 - Calculator and local file tools
-- Optional Tavily web search
+- Keyless DuckDuckGo web search, or optional Tavily
 - Streaming-ready chat interface with session history
 
 ## Setup
@@ -20,16 +20,13 @@ python -m pip install -e ".[test]"
 Copy-Item .env.example .env
 ```
 
-For OpenAI:
+### No-payment option: Gemini
 
-```dotenv
-AI_PROVIDER=openai
-OPENAI_API_KEY=your_key
-OPENAI_MODEL=gpt-4o-mini
-EMBEDDING_PROVIDER=openai
-```
+Create a Gemini API key in Google AI Studio. It can be used with the API free tier; no
+billing or credit card is required for eligible free-tier usage.
 
-For Gemini:
+In Settings, select **Gemini**, enter the key, and use the app. The key is also used for
+free Gemini embeddings.
 
 ```dotenv
 AI_PROVIDER=gemini
@@ -38,7 +35,30 @@ GEMINI_MODEL=gemini-2.0-flash
 EMBEDDING_PROVIDER=gemini
 ```
 
-For web search, optionally set `TAVILY_API_KEY` and enable web search in the sidebar.
+### No-payment option: OpenRouter
+
+OpenRouter also provides a free-model router. Create an OpenRouter API key and select
+**OpenRouter** in Settings. For document embeddings, also enter a Gemini API key.
+
+```dotenv
+AI_PROVIDER=openrouter
+OPENROUTER_API_KEY=your_key
+OPENROUTER_MODEL=openrouter/free
+GEMINI_API_KEY=your_gemini_key
+EMBEDDING_PROVIDER=gemini
+```
+
+### Optional: OpenAI
+
+```dotenv
+AI_PROVIDER=openai
+OPENAI_API_KEY=your_key
+OPENAI_MODEL=gpt-4o-mini
+EMBEDDING_PROVIDER=openai
+```
+
+Enable web search in the sidebar. It uses DuckDuckGo without an API key by default.
+Set `TAVILY_API_KEY` to use Tavily instead.
 
 ## Run
 

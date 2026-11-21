@@ -31,7 +31,7 @@ if "sources" not in st.session_state:
 if "indexed_files" not in st.session_state:
     st.session_state.indexed_files = []
 if "provider" not in st.session_state:
-    st.session_state.provider = os.getenv("AI_PROVIDER", "openai").lower()
+    st.session_state.provider = os.getenv("AI_PROVIDER", "gemini").lower()
 if "pending_prompt" not in st.session_state:
     st.session_state.pending_prompt = None
 
@@ -327,8 +327,12 @@ with header_right:
         st.subheader("Configuration")
         provider = st.selectbox(
             "Model provider",
-            options=["openai", "gemini"],
-            index=0 if st.session_state.provider == "openai" else 1,
+            options=["gemini", "openrouter", "openai"],
+            index=["gemini", "openrouter", "openai"].index(
+                st.session_state.provider
+                if st.session_state.provider in {"gemini", "openrouter", "openai"}
+                else "gemini"
+            ),
         )
         st.session_state.provider = provider
         os.environ["AI_PROVIDER"] = provider
@@ -343,7 +347,7 @@ with header_right:
             if key:
                 os.environ["OPENAI_API_KEY"] = key
             os.environ["EMBEDDING_PROVIDER"] = "openai"
-        else:
+        elif provider == "gemini":
             key = st.text_input(
                 "Gemini API key",
                 type="password",
@@ -353,6 +357,25 @@ with header_right:
             if key:
                 os.environ["GEMINI_API_KEY"] = key
             os.environ["EMBEDDING_PROVIDER"] = "gemini"
+        else:
+            key = st.text_input(
+                "OpenRouter API key",
+                type="password",
+                value=os.getenv("OPENROUTER_API_KEY", ""),
+                placeholder="sk-or-v1-...",
+            )
+            if key:
+                os.environ["OPENROUTER_API_KEY"] = key
+            embedding_key = st.text_input(
+                "Gemini API key for embeddings",
+                type="password",
+                value=os.getenv("GEMINI_API_KEY", ""),
+                placeholder="Enter API key",
+            )
+            if embedding_key:
+                os.environ["GEMINI_API_KEY"] = embedding_key
+            os.environ["EMBEDDING_PROVIDER"] = "gemini"
+            st.caption("Free chat models: openrouter/free")
 
         tavily_key = st.text_input(
             "Tavily key",
@@ -363,8 +386,13 @@ with header_right:
         if tavily_key:
             os.environ["TAVILY_API_KEY"] = tavily_key
 
-        required_key = "OPENAI_API_KEY" if provider == "openai" else "GEMINI_API_KEY"
-        st.caption("✓ API key connected" if os.getenv(required_key) else "API key required")
+        if provider == "openai":
+            required_key = "OPENAI_API_KEY"
+        elif provider == "gemini":
+            required_key = "GEMINI_API_KEY"
+        else:
+            required_key = "OPENROUTER_API_KEY"
+        st.caption("✓ API key connected" if os.getenv(required_key) else "Free API key required")
 
 
 chat_col, source_col = st.columns([8.2, 3.2], gap="large")
@@ -424,7 +452,12 @@ with chat_col:
         with st.chat_message("assistant"):
             try:
                 config = AppConfig.from_env()
-                required_key = "OPENAI_API_KEY" if config.provider == "openai" else "GEMINI_API_KEY"
+                if config.provider == "openai":
+                    required_key = "OPENAI_API_KEY"
+                elif config.provider == "gemini":
+                    required_key = "GEMINI_API_KEY"
+                else:
+                    required_key = "OPENROUTER_API_KEY"
                 if not os.getenv(required_key):
                     raise ValueError("Open Settings and enter an API key to start.")
 
@@ -465,14 +498,20 @@ with chat_col:
 
                 web_tool = None
                 if enable_web:
-                    if not config.tavily_key:
-                        raise ValueError("Add a Tavily key in Settings to enable web search.")
-                    from langchain_community.tools.tavily_search import TavilySearchResults
+                    if config.tavily_key:
+                        from langchain_community.tools.tavily_search import TavilySearchResults
 
-                    web_tool = TavilySearchResults(
-                        max_results=5,
-                        tavily_api_key=config.tavily_key,
-                    )
+                        web_tool = TavilySearchResults(
+                            max_results=5,
+                            tavily_api_key=config.tavily_key,
+                        )
+                    else:
+                        from langchain_community.tools import DuckDuckGoSearchRun
+
+                        web_tool = DuckDuckGoSearchRun(
+                            name="web_search",
+                            description="Search the live web with DuckDuckGo.",
+                        )
 
                 with st.status("Researching your request", expanded=False) as status:
                     if rag_tool is not None:

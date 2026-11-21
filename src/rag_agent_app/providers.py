@@ -5,6 +5,21 @@ from .config import AppConfig
 
 
 def build_chat_model(config: AppConfig) -> BaseChatModel:
+    if config.provider == "openrouter":
+        import os
+        from langchain_openai import ChatOpenAI
+
+        key = os.getenv("OPENROUTER_API_KEY")
+        if not key:
+            raise ValueError("OPENROUTER_API_KEY is required")
+        return ChatOpenAI(
+            model=config.chat_model,
+            temperature=0,
+            streaming=True,
+            api_key=key,
+            base_url="https://openrouter.ai/api/v1",
+        )
+
     if config.provider == "openai":
         from langchain_openai import ChatOpenAI
 
