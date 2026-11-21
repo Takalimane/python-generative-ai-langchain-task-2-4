@@ -3,6 +3,7 @@ import pytest
 from rag_agent_app.config import AppConfig
 from rag_agent_app.providers import build_chat_model
 from rag_agent_app import safe_external_text
+from rag_agent_app.diagnostics import ConfigError, describe_key, sanitize_key
 
 
 def test_config_rejects_unknown_provider(monkeypatch):
@@ -23,18 +24,42 @@ def test_openrouter_free_router_config(monkeypatch):
 
 
 def test_openrouter_chat_model_receives_api_key(monkeypatch):
-    monkeypatch.setenv("OPENROUTER_API_KEY", "test-openrouter-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-key")
     config = AppConfig(
         provider="openrouter",
         chat_model="openrouter/free",
         embedding_provider="gemini",
         tavily_key=None,
+        openrouter_key="sk-or-test-key",
     )
 
     model = build_chat_model(config)
 
-    assert model.openai_api_key.get_secret_value() == "test-openrouter-key"
+    assert model.openai_api_key.get_secret_value() == "sk-or-test-key"
 
 
 def test_smart_punctuation_is_normalized():
     assert safe_external_text("The user\u2019s plan \u2014 it\u2019s ready") == "The user's plan - it's ready"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("  sk-or-test123  ", "sk-or-test123"),
+        ('"sk-or-test123"', "sk-or-test123"),
+        ("Bearer sk-or-test123", "sk-or-test123"),
+    ],
+)
+def test_sanitize_key(raw, expected):
+    assert sanitize_key(raw) == expected
+
+
+def test_sanitize_key_rejects_internal_whitespace():
+    with pytest.raises(ConfigError):
+        sanitize_key("sk-or-test key")
+
+
+def test_describe_key_never_returns_key_characters():
+    details = describe_key("sk-or-secret-value")
+    assert details["present"] is True
+    assert "secret" not in str(details)

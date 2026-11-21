@@ -8,6 +8,9 @@ class AppConfig:
     chat_model: str
     embedding_provider: str
     tavily_key: str | None
+    openrouter_key: str | None = None
+    openai_key: str | None = None
+    gemini_key: str | None = None
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -28,4 +31,7 @@ class AppConfig:
             chat_model=chat_model,
             embedding_provider=embedding_provider,
             tavily_key=os.getenv("TAVILY_API_KEY") or None,
+            openrouter_key=os.getenv("OPENROUTER_API_KEY") or None,
+            openai_key=os.getenv("OPENAI_API_KEY") or None,
+            gemini_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or None,
         )
